@@ -1,5 +1,5 @@
 /* Spark Estimator service worker — offline-first PWA shell. */
-const CACHE = 'spark-estimator-v5';
+const CACHE = 'spark-estimator-v6';
 
 /* App shell: local files that must be available offline. */
 const SHELL = [
@@ -15,14 +15,25 @@ const SHELL = [
   './prices.csv',
 ];
 
-/* CDN libraries we runtime-cache so export / OCR keep working offline
-   after the first online load. */
+/* Export libraries — precached on install (best-effort) so Excel/ZIP export
+   works offline immediately after the first load, not just the second. */
+const EXPORT_LIBS = [
+  'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
+  'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+];
+
+/* CDN libraries we also runtime-cache (incl. lazy-loaded Tesseract OCR) so
+   they keep working offline after the first online load. */
 const RUNTIME_HOSTS = ['cdn.jsdelivr.net', 'cdn.sheetjs.com', 'unpkg.com'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())
-  );
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await c.addAll(SHELL); // local shell must succeed
+    // export libs: best-effort, never fail the install if a CDN hiccups
+    await Promise.allSettled(EXPORT_LIBS.map((u) => c.add(u)));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (e) => {
