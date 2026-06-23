@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Estimator" />
+<meta name="theme-color" content="#111827" />
+<title>Spark Estimator</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" href="favicon.png" />
+<!-- Excel + ZIP export. Runtime-cached by the service worker for offline use. -->
+<script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+/* ============================================================
+   DESIGN SYSTEM  — hand-written, no framework. Fully offline.
+   ============================================================ */
+:root{
+  --orange:#d2461e; --orange-600:#ea580c; --orange-700:#c2410c;
+  --orange-50:#fff5f0; --orange-100:#ffe7da; --orange-200:#fed1bd;
+  --ink:#0f1623; --ink-2:#111827; --slate-900:#111827; --slate-700:#374151;
+  --slate-500:#6b7280; --slate-400:#9ca3af; --slate-300:#d1d5db;
+  --slate-200:#e5e7eb; --slate-100:#f3f4f6; --slate-50:#f8fafc;
+  --bg:#eef1f5; --card:#ffffff; --green:#16a34a; --green-50:#f0fdf4;
+  --red:#dc2626; --red-50:#fef2f2; --amber:#d97706; --amber-50:#fffbeb;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --shadow-lg:0 10px 30px rgba(16,24,40,.12);
+  --r:14px; --r-lg:20px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overscroll-behavior-y:none}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg);color:var(--slate-900);
+  -webkit-font-smoothing:antialiased;font-size:15px;line-height:1.4;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input{font-family:inherit}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.tnum{font-variant-numeric:tabular-nums}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.scroll-x::-webkit-scrollbar{display:none}
+.safe-b{padding-bottom:max(14px,env(safe-area-inset-bottom))}
+.safe-t{padding-top:env(safe-area-inset-top)}
+.hidden{display:none!important}
+.app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;background:var(--bg);position:relative}
+
+/* ---- Header ---- */
+.hdr{background:linear-gradient(160deg,#1b2638,#0e1422);color:#fff;position:sticky;top:0;z-index:20;
+  box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 4px}
+.hdr-top .brand{font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--orange-600)}
+.icon-btn{width:38px;height:38px;display:flex;align-items:center;justify-content:center;color:#9aa6b8;border-radius:10px}
+.icon-btn:active{background:rgba(255,255,255,.08)}
+.hdr-body{padding:2px 16px 14px}
+.kicker{font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--orange-600)}
+.total{font-size:42px;font-weight:800;letter-spacing:-.02em;margin:2px 0 0;line-height:1.05}
+.subline{display:flex;align-items:center;gap:8px;margin-top:4px}
+.subline .nm{font-size:12.5px;color:#9aa6b8;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-pencil{color:#6b7688;display:flex}
+.progress-row{display:flex;align-items:center;gap:10px;margin-top:11px}
+.bar{flex:1;height:6px;background:rgba(255,255,255,.13);border-radius:99px;overflow:hidden}
+.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--orange),var(--orange-600));border-radius:99px;transition:width .45s cubic-bezier(.4,0,.2,1)}
+.progress-row .lbl{font-size:11.5px;color:#8b96a8;white-space:nowrap}
+
+/* ---- Room tabs ---- */
+.tabs{display:flex;background:var(--card);border-bottom:1px solid var(--slate-200);position:sticky;top:0;z-index:10}
+.tabs.sticky-rooms{top:0}
+.tab{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+  padding:9px 14px;border-bottom:2.5px solid transparent;white-space:nowrap;color:var(--slate-500);position:relative}
+.tab .t-name{font-size:13px;font-weight:600}
+.tab .t-sub{font-size:11px;color:var(--slate-400);font-weight:600}
+.tab.on{border-color:var(--orange);color:var(--orange-700);background:var(--orange-50)}
+.tab.on .t-sub{color:var(--orange-600)}
+.tab .dot{position:absolute;top:7px;right:6px;width:6px;height:6px;border-radius:99px;background:var(--green)}
+.tab-add{flex:0 0 auto;padding:9px 16px;color:var(--orange-600);font-weight:700;font-size:13px;white-space:nowrap}
+
+/* ---- Body ---- */
+.body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 13px 120px}
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin:2px 4px 11px}
+.sec-head .t{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--slate-400)}
+.sec-head .c{font-size:11.5px;color:var(--slate-400);font-weight:600}
+.sec-head .rm{color:var(--red);font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:4px}
+
+/* ---- Group card ---- */
+.group{background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow);margin-bottom:11px;overflow:hidden}
+.group.active{box-shadow:0 0 0 1.5px var(--orange-200),var(--shadow)}
+.group-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 15px;width:100%;text-align:left;gap:8px}
+.group-hd .l{display:flex;align-items:center;gap:10px;min-width:0}
+.chev{color:var(--slate-400);display:flex;transition:transform .2s;flex:0 0 auto}
+.chev.open{transform:rotate(180deg)}
+.group-hd .gl{font-size:14.5px;font-weight:700;color:var(--slate-900)}
+.pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;flex:0 0 auto}
+.pill.ok{background:var(--green-50);color:var(--green)}
+.pill.cnt{background:var(--orange-100);color:var(--orange-700)}
+.pill.na{background:var(--slate-100);color:var(--slate-500)}
+.group-hd .gt{font-size:15px;font-weight:800;flex:0 0 auto}
+.gt.zero{color:var(--slate-300)}
+.gt.pos{color:var(--orange-700)}
+.group-bd{border-top:1px solid var(--slate-100);padding:9px 11px 12px;display:flex;flex-direction:column;gap:8px}
+
+/* ---- Line item ---- */
+.item{background:var(--slate-50);border:1px solid var(--slate-100);border-radius:var(--r);overflow:hidden;transition:box-shadow .15s}
+.item.on{background:#fff;box-shadow:0 0 0 1.5px var(--orange-200)}
+.item.standalone{background:#fff;box-shadow:var(--shadow);border-color:transparent}
+.item-row{display:flex;gap:11px;padding:12px 13px;align-items:flex-start}
+.check{flex:0 0 auto;width:26px;height:26px;border-radius:99px;border:2px solid var(--slate-300);background:#fff;
+  display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s}
+.check.on{background:var(--orange);border-color:var(--orange)}
+.item-main{flex:1;min-width:0}
+.item-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.item-name{font-size:13.5px;font-weight:600;color:var(--slate-900);line-height:1.3}
+.item.off .item-name{color:var(--slate-400)}
+.item-tot{font-size:14.5px;font-weight:800;flex:0 0 auto}
+.item-tot.zero{color:var(--slate-300)}
+.item-tot.pos{color:var(--orange-700)}
+.item-meta{font-size:11.5px;color:var(--slate-400);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cost-edit{color:var(--slate-500);border-bottom:1px dashed var(--slate-300);font-weight:600}
+.item-x{color:var(--slate-300);padding:2px;display:flex;flex:0 0 auto}
+.item-x:active{color:var(--red)}
+.expand{margin-top:11px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.qty-wrap{display:flex;align-items:center;gap:8px}
+.qty-wrap .ql{font-size:13px;color:var(--slate-500)}
+.qinput{border:1px solid var(--slate-200);border-radius:11px;padding:9px 11px;width:104px;text-align:right;
+  font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;background:#fff}
+.qinput:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-100)}
+.note-input{width:100%;margin-top:10px;border:1px solid var(--slate-200);border-radius:11px;padding:9px 12px;font-size:13px;background:#fff;color:var(--slate-700)}
+.note-input:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-100)}
+.note-input::placeholder{color:var(--slate-400)}
+.unit-lbl{font-size:12.5px;color:var(--slate-400)}
+.yr-input{width:84px;text-align:center;font-size:15px}
+
+/* serial / photo block */
+.serial-block{margin-top:11px;padding-top:11px;border-top:1px dashed var(--slate-200)}
+.serial-block .sh{font-size:11px;font-weight:700;color:var(--slate-500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.photos{display:flex;flex-wrap:wrap;gap:8px}
+.photo{position:relative;width:78px;height:78px;border-radius:12px;overflow:hidden;border:1px solid var(--slate-200);flex:0 0 auto}
+.photo img{width:100%;height:100%;object-fit:cover;display:block}
+.photo .px{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:99px;background:var(--red);color:#fff;
+  font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow)}
+.photo .badge{position:absolute;bottom:0;left:0;right:0;background:rgba(15,22,35,.82);color:#fff;font-size:9px;
+  font-weight:700;text-align:center;padding:2px 1px;letter-spacing:.02em}
+.add-photo{width:78px;height:78px;border-radius:12px;border:2px dashed var(--orange-200);background:var(--orange-50);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--orange-600);
+  font-size:10.5px;font-weight:600;flex:0 0 auto}
+.age-note{margin-top:9px;border-radius:11px;padding:9px 11px;font-size:12px;font-weight:500;line-height:1.35}
+.age-note.warn{background:var(--red-50);color:var(--red)}
+.age-note.ok{background:var(--green-50);color:var(--green)}
+.age-note.info{background:var(--amber-50);color:var(--amber)}
+.age-note b{font-weight:800}
+
+/* No action row */
+.na-row{display:flex;align-items:center;gap:11px;padding:11px 13px;width:100%;text-align:left}
+.na-row .na-txt{font-size:13px;font-style:italic;color:var(--slate-400)}
+.na-row.on .na-txt{color:var(--orange-700);font-weight:600;font-style:normal}
+
+.add-item-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:11px;
+  border:1.5px dashed var(--slate-300);border-radius:var(--r);color:var(--slate-500);font-weight:600;font-size:13px;background:#fff}
+.add-item-btn:active{border-color:var(--orange);color:var(--orange-600)}
+
+/* ---- Bottom nav ---- */
+.btmnav{position:fixed;left:0;right:0;bottom:0;z-index:15;background:#fff;border-top:1px solid var(--slate-200);
+  box-shadow:0 -4px 24px rgba(16,24,40,.08)}
+.btmnav-in{max-width:560px;margin:0 auto;display:flex;gap:9px;padding:11px 13px}
+.nbtn{flex:1;padding:13px;border-radius:15px;font-weight:700;font-size:13.5px;text-align:center}
+.nbtn.ghost{border:2px solid var(--orange);color:var(--orange-700);background:#fff}
+.nbtn.ghost:disabled{opacity:.3}
+.nbtn.solid{background:var(--orange);color:#fff;box-shadow:0 4px 14px rgba(210,70,30,.32)}
+.nbtn.dark{background:var(--slate-900);color:#fff}
+
+/* ---- Side panel ---- */
+.overlay{position:fixed;inset:0;background:rgba(8,12,20,.5);z-index:40;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.show{opacity:1;pointer-events:auto}
+.panel{position:fixed;top:0;left:0;height:100%;width:min(310px,84vw);background:#fff;z-index:50;
+  transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:var(--shadow-lg)}
+.panel.show{transform:none}
+.panel-hd{background:linear-gradient(160deg,#1b2638,#0e1422);color:#fff;padding:env(safe-area-inset-top) 18px 16px;padding-top:max(18px,env(safe-area-inset-top))}
+.panel-hd img{height:26px;margin:8px 0 12px;filter:brightness(0) invert(1)}
+.panel-hd .ph-row{display:flex;align-items:center;justify-content:space-between}
+.panel-hd .ph-row b{font-size:16px}
+.panel-list{flex:1;overflow-y:auto}
+.pj{display:flex;align-items:stretch;border-bottom:1px solid var(--slate-100)}
+.pj.on{background:var(--orange-50)}
+.pj .pj-main{flex:1;text-align:left;padding:14px 16px;min-width:0}
+.pj .pj-name{font-size:14px;font-weight:600;color:var(--slate-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj.on .pj-name{color:var(--orange-700)}
+.pj .pj-meta{font-size:11.5px;color:var(--slate-400);margin-top:2px}
+.pj .pj-tot{font-size:11.5px;color:var(--orange-600);font-weight:700;margin-top:2px}
+.pj .pj-acts{display:flex;flex-direction:column;justify-content:center;gap:2px;padding-right:8px}
+.pj .pj-acts button{padding:7px;color:var(--slate-400);border-radius:8px}
+.pj .pj-acts .del:active{color:var(--red)}
+.panel-ft{padding:14px;border-top:1px solid var(--slate-100)}
+.btn-primary{width:100%;padding:13px;border-radius:14px;background:var(--orange);color:#fff;font-weight:700;font-size:14px;text-align:center}
+
+/* ---- Sheets / modals ---- */
+.sheet-wrap{position:fixed;inset:0;z-index:60;display:none}
+.sheet-wrap.show{display:block}
+.sheet-bg{position:absolute;inset:0;background:rgba(8,12,20,.55)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;
+  max-height:90vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);
+  animation:slideup .28s cubic-bezier(.4,0,.2,1)}
+@keyframes slideup{from{transform:translateY(100%)}to{transform:none}}
+.sheet-hd{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;border-bottom:1px solid var(--slate-100)}
+.sheet-hd h2{margin:0;font-size:17px;font-weight:800}
+.sheet-bd{overflow-y:auto;padding:18px 20px;padding-bottom:max(20px,env(safe-area-inset-bottom))}
+.modal-wrap{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;padding:22px}
+.modal-wrap.show{display:flex}
+.modal{background:#fff;border-radius:20px;width:100%;max-width:380px;padding:22px;box-shadow:var(--shadow-lg);position:relative;z-index:1}
+.modal h3{margin:0 0 14px;font-size:17px;font-weight:800}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--slate-500);margin-bottom:5px}
+.field input,.field select{width:100%;border:1.5px solid var(--slate-200);border-radius:12px;padding:11px 13px;font-size:15px;background:#fff}
+.field input:focus,.field select:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-100)}
+.row2{display:flex;gap:10px}.row2 > *{flex:1}
+.modal-acts{display:flex;gap:10px;margin-top:8px}
+.modal-acts button{flex:1;padding:12px;border-radius:12px;font-weight:700;font-size:14px}
+.btn-cancel{border:1.5px solid var(--slate-200);color:var(--slate-600)}
+.btn-save{background:var(--orange);color:#fff}
+.btn-danger{background:var(--red);color:#fff}
+
+/* room type chooser */
+.rt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rt{border:1.5px solid var(--slate-200);border-radius:14px;padding:14px 12px;text-align:left}
+.rt:active{border-color:var(--orange);background:var(--orange-50)}
+.rt .rt-n{font-weight:700;font-size:14px}
+.rt .rt-g{font-size:11px;color:var(--slate-400);margin-top:3px;line-height:1.3}
+.rt.dis{opacity:.4;pointer-events:none}
+
+/* settings */
+.set-card{background:var(--slate-50);border-radius:14px;padding:14px;margin-bottom:14px}
+.set-card h4{margin:0 0 4px;font-size:14px;font-weight:800}
+.set-card p{margin:0 0 12px;font-size:12.5px;color:var(--slate-500);line-height:1.4}
+.upload-lbl{display:block;text-align:center;padding:12px;border-radius:12px;background:var(--orange);color:#fff;font-weight:700;font-size:14px}
+.btn-line{width:100%;padding:11px;border-radius:12px;border:1.5px solid var(--slate-200);color:var(--slate-600);font-weight:700;font-size:13px;margin-top:8px}
+.status{padding:11px 13px;border-radius:11px;font-size:12.5px;font-weight:600;margin-bottom:12px}
+.status.def{background:var(--slate-100);color:var(--slate-500)}
+.status.act{background:var(--green-50);color:var(--green)}
+
+/* deal analyzer */
+.deal-hero{background:linear-gradient(160deg,#1b2638,#0e1422);color:#fff;border-radius:18px;padding:18px;margin-bottom:16px}
+.deal-hero .dl{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--orange-600)}
+.deal-hero .dv{font-size:34px;font-weight:800;margin-top:2px;letter-spacing:-.02em}
+.deal-hero .dsub{font-size:12px;color:#9aa6b8;margin-top:3px}
+.verdict{margin-top:14px;border-radius:12px;padding:12px 14px;font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:9px}
+.verdict.go{background:rgba(22,163,74,.18);color:#86efac}
+.verdict.tight{background:rgba(217,119,6,.18);color:#fcd34d}
+.verdict.no{background:rgba(220,38,38,.2);color:#fca5a5}
+.deal-line{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--slate-100);font-size:13.5px}
+.deal-line:last-child{border:none}
+.deal-line .v{font-weight:700;font-variant-numeric:tabular-nums}
+.deal-line .v.neg{color:var(--red)}
+.deal-line.grand{font-weight:800;font-size:15px}
+
+/* summary */
+.sum-sec{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow);margin-bottom:11px;overflow:hidden}
+.sum-sec-hd{display:flex;justify-content:space-between;padding:13px 15px;background:var(--slate-50);border-bottom:1px solid var(--slate-100)}
+.sum-sec-hd .sl{font-weight:700;font-size:13.5px}
+.sum-sec-hd .st{font-weight:800;color:var(--orange-700)}
+.sum-row{display:flex;justify-content:space-between;padding:9px 15px;font-size:13px;border-bottom:1px solid var(--slate-50)}
+.sum-row .sn{color:var(--slate-600)}.sum-row .sn small{color:var(--slate-400);font-weight:600}
+.sum-row .sv{font-weight:700;font-variant-numeric:tabular-nums}
+.toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:var(--slate-900);color:#fff;
+  padding:11px 18px;border-radius:99px;font-size:13px;font-weight:600;z-index:90;box-shadow:var(--shadow-lg);
+  opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.spinner{width:16px;height:16px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:99px;
+  display:inline-block;animation:spin .7s linear infinite}
+.spinner.dark{border-color:var(--slate-200);border-top-color:var(--orange)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;color:var(--slate-400);padding:60px 24px;font-size:14px}
+
+/* ---- polish pass: icons, tactile feedback, summary chart ---- */
+.tab .t-ico{display:flex;justify-content:center;color:var(--slate-300);margin-bottom:3px}
+.tab.on .t-ico{color:var(--orange)}
+.sec-head .t{display:flex;align-items:center}
+.sec-ico{display:inline-flex;margin-right:7px;color:var(--orange)}
+.group-hd .l .g-ico{display:flex;color:var(--slate-300);flex:0 0 auto}
+.group.active .group-hd .l .g-ico{color:var(--orange)}
+.check,.group-hd,.tab,.tab-add,.nbtn,.add-photo,.btn-primary,.add-item-btn,.na-row,.rt,.icon-btn,.pj-main{transition:transform .12s ease,background .15s,color .15s,border-color .15s,box-shadow .15s}
+.group-hd:active,.tab:active,.tab-add:active,.nbtn:active,.add-photo:active,.btn-primary:active,.add-item-btn:active,.na-row:active,.rt:active,.pj-main:active{transform:scale(.985)}
+.check:active{transform:scale(.88)}
+.nbtn.solid{will-change:transform}
+.item{transition:box-shadow .18s ease,background .18s ease}
+/* cost-distribution bar (summary) */
+.dist-card{background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:15px 16px;margin-bottom:11px}
+.dist-card .dt{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--slate-400);margin-bottom:11px}
+.dist{display:flex;height:14px;border-radius:99px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(0,0,0,.04)}
+.dist > span{height:100%;transition:width .4s ease}
+.dist-legend{display:flex;flex-wrap:wrap;gap:9px 16px;margin-top:13px}
+.dist-legend .lg{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--slate-500);font-weight:600}
+.dist-legend .sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+.dist-legend .lg b{color:var(--slate-800)}
+.dist-legend .lg span.pc{color:var(--slate-400)}
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay"></div>
+
+<!-- Projects panel -->
+<aside class="panel" id="panel">
+  <div class="panel-hd">
+    <div class="ph-row"><img src="spark-logo.png" alt="Spark" /><button class="icon-btn" data-x="panel">✕</button></div>
+    <b>Projects</b>
+  </div>
+  <div class="panel-list" id="panel-list"></div>
+  <div class="panel-ft"><button class="btn-primary" data-act="new-project">+ New Estimate</button></div>
+</aside>
+
+<div class="app" id="app"></div>
+
+<!-- Generic input modal -->
+<div class="modal-wrap" id="modal">
+  <div class="sheet-bg" data-x="modal"></div>
+  <div class="modal" id="modal-inner"></div>
+</div>
+
+<!-- Bottom sheet (settings / add-room / deal / export) -->
+<div class="sheet-wrap" id="sheet">
+  <div class="sheet-bg" data-x="sheet"></div>
+  <div class="sheet" id="sheet-inner"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden" />
+
+<script>
+/* ============================================================
+   1. PRICE LIST  — sourced verbatim from prices.csv (single
+   source of truth). `serial` flags equipment whose photo we
+   try to OCR for a manufacture year. `life` = typical lifespan.
+   ============================================================ */
+const ITEMS = {
+  // Interior / General
+  'ig-01':{n:'Refinish Hardwood Floor',c:2.35,u:'sqft'},
+  'ig-02':{n:'New Hardwoods 1.5"',c:10.0,u:'sqft'},
+  'ig-03':{n:'New Hardwoods 2"',c:4.75,u:'sqft'},
+  'ig-04':{n:'Hardwood Splicing',c:8.4,u:'sqft'},
+  'ig-05':{n:'Vinyl Plank',c:2.5,u:'sqft'},
+  'ig-06':{n:'Carpet',c:1.9,u:'sqft'},
+  'ig-07':{n:'Interior Paint — 2 Tone',c:2.95,u:'sqft'},
+  'ig-08':{n:'Drywall Repair',c:900,u:'1,000 sqft'},
+  'ig-09':{n:'Wallpaper Removal',c:250,u:'room'},
+  'ig-10':{n:'Interior Door — Hollow Slab',c:125,u:'ea.'},
+  'ig-11':{n:'Interior Door Hardware (Knob + Hinges + Labor)',c:25,u:'ea.'},
+  'ig-12':{n:'Bifold Door with Framing',c:400,u:'ea.'},
+  'ig-13':{n:'Interior Door — Pre-hung',c:200,u:'ea.'},
+  'ig-14':{n:'Front Entry Door',c:475,u:'ea.'},
+  'ig-15':{n:'Front Entry Door Hardware',c:80,u:'ea.'},
+  'ig-16':{n:'Exterior Door Hardware',c:75,u:'handle'},
+  'ig-17':{n:'Exterior Insulated Side Door (Installed)',c:500,u:'ea.'},
+  'ig-18':{n:'Sliding Glass Door',c:1025,u:'ea.'},
+  'ig-19':{n:'Trim Out (Casing, Crown, Baseboard)',c:3.75,u:'LF'},
+  'ig-20':{n:'MISC / Punch List',c:2650,u:'flat'},
+  'ig-21':{n:'Finish Out Labor',c:1350,u:'flat'},
+  'ig-22':{n:'Light Fixtures',c:70,u:'100 sqft'},
+  'ig-23':{n:'Bedbug Spray / Heat Treat',c:475,u:'ea.'},
+  'ig-24':{n:'Termite Treatment',c:650,u:'ea.'},
+  'ig-25':{n:'Demo',c:1375,u:'variable'},
+  'ig-26':{n:'Haul Off',c:725,u:'load'},
+  'ig-27':{n:'Final Cleaning',c:325,u:'flat'},
+  'ig-28':{n:'Staging',c:0.9,u:'sqft'},
+  // Kitchen
+  'kt-01':{n:'Hinges and Pulls',c:275,u:'kitchen'},
+  'kt-02':{n:'Cabinets Uppers',c:125,u:'LF'},
+  'kt-03':{n:'Cabinets Lowers',c:150,u:'LF'},
+  'kt-04':{n:'Cabinet Door Faces Only',c:80,u:'door'},
+  'kt-05':{n:'Cabinets (Labor & Paint)',c:1100,u:'kitchen'},
+  'kt-06':{n:'Granite + 4" Splash Guard',c:40,u:'LF'},
+  'kt-07':{n:'Backsplash',c:725,u:'house'},
+  'kt-08':{n:'Misc Woodwork',c:500,u:'variable'},
+  'kt-09':{n:'Tile — Large Areas',c:6.45,u:'sqft'},
+  'kt-10':{n:'Tile — Small Areas',c:10,u:'sqft'},
+  'kt-11':{n:'Undermount Kitchen Sink',c:325,u:'ea.'},
+  'kt-12':{n:'Microwave / Hood',c:500,u:'ea.',serial:1,life:10},
+  'kt-13':{n:'Range',c:725,u:'ea.',serial:1,life:13},
+  'kt-14':{n:'Wall Oven',c:1075,u:'ea.',serial:1,life:13},
+  'kt-15':{n:'Cooktop',c:550,u:'ea.',serial:1,life:13},
+  'kt-16':{n:'Dishwasher',c:575,u:'ea.',serial:1,life:10},
+  'kt-17':{n:'Fridge',c:1175,u:'ea.',serial:1,life:13},
+  // Bathroom
+  'ba-01':{n:'Granite ($/LF)',c:35,u:'LF'},
+  'ba-02':{n:'New Bottom Vanity',c:125,u:'LF'},
+  'ba-03':{n:'Home Depot Vanity w/ Sink (18")',c:225,u:'ea.'},
+  'ba-04':{n:'Toilet',c:150,u:'ea.'},
+  'ba-05':{n:'Tile — Large Areas',c:5.8,u:'sqft'},
+  'ba-06':{n:'Tile — Small Areas',c:10,u:'sqft'},
+  'ba-07':{n:'Reglaze Tub or Chemical Clean',c:350,u:'ea.'},
+  'ba-08':{n:'Reglaze Tub + Surround',c:750,u:'ea.'},
+  'ba-09':{n:'Reglaze Shower',c:1325,u:'ea.'},
+  'ba-10':{n:'Tiled Shower Tear Out + Tile Install',c:3100,u:'ea.'},
+  'ba-11':{n:'Tub Tile Surround Tear Out + Tile Install (incl. tub)',c:2250,u:'ea.'},
+  'ba-12':{n:'Shower Plastic Insert Tear Out + New Insert',c:825,u:'ea.'},
+  'ba-13':{n:'Tub Tear Out + New Insert & Tub',c:1575,u:'ea.'},
+  'ba-14':{n:'Undermount Sink',c:150,u:'ea.'},
+  'ba-15':{n:'Mirror',c:200,u:'ea.'},
+  'ba-16':{n:'HVL (needed if no window)',c:275,u:'ea.'},
+  // Appliances / Systems
+  'as-01':{n:'Furnace',c:3350,u:'ea.',serial:1,life:18,note:'Photo of serial required'},
+  'as-02':{n:'Condensing Unit',c:3300,u:'ea.',serial:1,life:15,note:'Photo of serial required'},
+  'as-03':{n:'Package Unit',c:4700,u:'ea.',serial:1,life:15},
+  'as-04':{n:'A-Coil (if no condensing unit)',c:1625,u:'ea.'},
+  'as-05':{n:'Ducting (if NO HVAC)',c:3200,u:'ea.'},
+  'as-06':{n:'Duct Cleaning — Floor Vents',c:550,u:'ea.'},
+  'as-07':{n:'Window Unit Replacement 220',c:575,u:'ea.'},
+  'as-08':{n:'Hot Water Heater w/ Expansion Tank',c:1425,u:'ea.',serial:1,life:11,note:'Photo of serial required'},
+  'as-09':{n:'Hot Water Heater Expansion Tank Only',c:200,u:'ea.'},
+  'as-10':{n:'Switches / Outlets',c:1400,u:'house'},
+  'as-11':{n:'Standard Electrical',c:1650,u:'house'},
+  'as-12':{n:'Subfloor',c:8.2,u:'sqft'},
+  'as-13':{n:'Framing',c:950,u:'variable'},
+  'as-14':{n:'Structural (Pier)',c:375,u:'pier'},
+  'as-15':{n:'Structural Foam Injection',c:5.85,u:'sqft of affected area'},
+  'as-16':{n:'Roof',c:1100,u:'225 sqft L&M'},
+  'as-17':{n:'Plumbing',c:1000,u:'variable'},
+  'as-18':{n:'Electrical Panel Swap to 200A',c:2350,u:'ea.'},
+  'as-19':{n:'Full Electrical Rewire (to Studs)',c:5.65,u:'sqft'},
+  'as-20':{n:'Full Electrical Rewire (leaving Drywall)',c:9.15,u:'sqft'},
+  'as-21':{n:'Wall Insulation (to Studs)',c:1.2,u:'sqft'},
+  'as-22':{n:'Attic Insulation',c:1225,u:'1,600 sqft house'},
+  'as-23':{n:'New Drywall to Studs (L&M)',c:5.2,u:'sqft'},
+  'as-24':{n:'Aluminum Wiring',c:2450,u:'variable'},
+  // Exterior
+  'ex-01':{n:'Fence Repair — Chain Link / Wood Gate',c:225,u:'variable'},
+  'ex-02':{n:'Fence Repair — Chain Link',c:275,u:'LF'},
+  'ex-03':{n:'Fence Repair — Privacy 6ft',c:30,u:'LF'},
+  'ex-04':{n:'Landscaping',c:450,u:'variable'},
+  'ex-05':{n:"Vinyl Siding (10'×10')",c:300,u:'square'},
+  'ex-06':{n:'Tuck Pointing',c:225,u:'variable'},
+  'ex-07':{n:'Exterior Paint',c:2.6,u:'sqft'},
+  'ex-08':{n:'Exterior Wood Repair',c:525,u:'variable'},
+  'ex-09':{n:"Siding Repair (10'×10')",c:975,u:'section'},
+  'ex-10':{n:'Tree Trimming',c:450,u:'variable'},
+  'ex-11':{n:'Tree Removal (w/o stump)',c:1450,u:'tree'},
+  'ex-12':{n:'Stump Grinding',c:250,u:'stump'},
+  'ex-13':{n:'Aluminum Window Paint (Int/Ext)',c:700,u:'house'},
+  'ex-14':{n:'Windows (3×5 sash)',c:425,u:'ea.'},
+  'ex-15':{n:'Window Repair — Non-Insulated (6×6+)',c:35,u:'sf'},
+  'ex-16':{n:'Window Repair — Insulated (6×6+)',c:40,u:'sf'},
+  'ex-17':{n:'Aluminum Framed Window Pane',c:100,u:'pane'},
+  'ex-18':{n:'Guttering',c:4.15,u:'LF'},
+  'ex-19':{n:'Concrete w/ Demo',c:200,u:'sqft'},
+  'ex-20':{n:'Mowing (summer, every 2 weeks)',c:45,u:'mowing'},
+  'ex-21':{n:'Garage Door — 1 Car',c:975,u:'ea.'},
+  'ex-22':{n:'Garage Door — 2 Car (Installed)',c:1225,u:'ea.'},
+  'ex-23':{n:'Garage Conversion',c:8850,u:'ea.'},
+};
+
+/* ============================================================
+   2. ROOM TYPES → collapsible groups (the required 19) + any
+   standalone whole-room items.  Singleton rooms are one-per-
+   house; multi rooms can be added many times (Bathroom 1/2…).
+   ============================================================ */
+const ROOM_TYPES = {
+  interior:{ label:'Interior / General', singleton:true,
+    groups:[
+      {key:'flooring',label:'Flooring',items:['ig-01','ig-02','ig-03','ig-04','ig-05','ig-06']},
+      {key:'paint',label:'Paint & Wall Repair',items:['ig-07','ig-08','ig-09']},
+      {key:'doors',label:'Doors',items:['ig-10','ig-11','ig-12','ig-13','ig-14','ig-15','ig-16','ig-17','ig-18']},
+      {key:'pest',label:'Pest Control',items:['ig-23','ig-24']},
+    ],
+    standalone:['ig-19','ig-20','ig-21','ig-22','ig-25','ig-26','ig-27','ig-28'] },
+  kitchen:{ label:'Kitchen', singleton:true,
+    groups:[
+      {key:'cabinets',label:'Cabinets',items:['kt-01','kt-02','kt-03','kt-04','kt-05']},
+      {key:'counters',label:'Countertops & Tile',items:['kt-06','kt-07','kt-08','kt-09','kt-10']},
+      {key:'appliances',label:'Appliances',items:['kt-11','kt-12','kt-13','kt-14','kt-15','kt-16','kt-17']},
+    ], standalone:[] },
+  bathroom:{ label:'Bathroom', multi:true, base:'Bathroom',
+    groups:[
+      {key:'vanity',label:'Vanity & Countertop',items:['ba-01','ba-02','ba-03','ba-14']},
+      {key:'tub',label:'Tub & Shower',items:['ba-07','ba-08','ba-09','ba-10','ba-11','ba-12','ba-13']},
+      {key:'tile',label:'Tile',items:['ba-05','ba-06']},
+    ], standalone:['ba-04','ba-15','ba-16'] },
+  systems:{ label:'Systems & Structure', singleton:true,
+    groups:[
+      {key:'hvac',label:'HVAC',items:['as-01','as-02','as-03','as-04','as-05','as-06','as-07']},
+      {key:'electrical',label:'Electrical',items:['as-10','as-11','as-18','as-19','as-20','as-24']},
+      {key:'structural',label:'Structural',items:['as-12','as-13','as-14','as-15']},
+      {key:'insulation',label:'Insulation & Drywall',items:['as-21','as-22','as-23']},
+    ], standalone:['as-08','as-09','as-16','as-17'] },
+  exterior:{ label:'Exterior', singleton:true,
+    groups:[
+      {key:'fence',label:'Fence',items:['ex-01','ex-02','ex-03']},
+      {key:'siding',label:'Siding',items:['ex-05','ex-09']},
+      {key:'windows',label:'Windows',items:['ex-13','ex-14','ex-15','ex-16','ex-17']},
+      {key:'garage',label:'Garage',items:['ex-21','ex-22','ex-23']},
+      {key:'trees',label:'Trees',items:['ex-10','ex-11','ex-12']},
+    ], standalone:['ex-04','ex-06','ex-07','ex-08','ex-18','ex-19','ex-20'] },
+  bedroom:{ label:'Bedroom', multi:true, base:'Bedroom',
+    groups:[
+      {key:'flooring',label:'Flooring',items:['ig-01','ig-02','ig-03','ig-04','ig-05','ig-06']},
+      {key:'paint',label:'Paint',items:['ig-07','ig-08','ig-09']},
+      {key:'doors',label:'Doors',items:['ig-10','ig-11','ig-13']},
+      {key:'closet',label:'Closet',items:['ig-12','ig-19']},
+    ], standalone:[] },
+  living:{ label:'Living / Common Area', multi:true, base:'Living Area',
+    groups:[
+      {key:'flooring',label:'Flooring',items:['ig-01','ig-02','ig-03','ig-04','ig-05','ig-06']},
+      {key:'paint',label:'Paint',items:['ig-07','ig-08','ig-09']},
+      {key:'doors',label:'Doors',items:['ig-10','ig-11','ig-13','ig-18']},
+      {key:'lighting',label:'Lighting',items:['ig-22']},
+    ], standalone:[] },
+};
+
+/* ============================================================
+   3. STORAGE
+   ============================================================ */
+const K_PROJ='spark_projects_v2', K_GP='spark_global_prices_v1', K_LAST='spark_last_v1';
+const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch{return false}};
+
+let GLOBAL_PRICES = load(K_GP,{});           // {itemId: cost}
+let PROJECTS = load(K_PROJ,[]);              // full project objects
+
+function persistProjects(){
+  if(!save(K_PROJ,PROJECTS)){
+    // localStorage full (usually photos) — retry stripping photo data URLs
+    const lite = PROJECTS.map(p=>({...p, photos:Object.fromEntries(
+      Object.entries(p.photos||{}).map(([k,arr])=>[k,arr.map(ph=>({...ph,url:''}))]))}));
+    save(K_PROJ,lite);
+    toast('Storage full — photos may not all persist');
+  }
+}
+
+/* ============================================================
+   4. STATE  (active project + UI)
+   ============================================================ */
+let P=null;                 // active project
+const ui={ room:0, view:'main', expanded:{}, };
+
+function blankProject(name){
+  return {
+    id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+    name:name||'New Estimate',
+    createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(),
+    rooms:[
+      {iid:'r-interior',type:'interior',name:'Interior / General'},
+      {iid:'r-kitchen',type:'kitchen',name:'Kitchen'},
+      {iid:'r-bath-1',type:'bathroom',name:'Bathroom 1'},
+      {iid:'r-systems',type:'systems',name:'Systems & Structure'},
+      {iid:'r-exterior',type:'exterior',name:'Exterior'},
+    ],
+    sel:{},          // 'iid::itemId' -> {q, year}
+    photos:{},       // 'iid::itemId' or 'iid::_room' -> [{id,url,serial,year,ts}]
+    na:{},           // 'iid::groupKey' -> true (No Action Needed)
+    prices:{},       // per-project price override {itemId: cost}
+    custom:[],       // [{id, iid, groupKey, n, c, u}]
+    removed:{},      // 'iid::itemId' -> true (hidden default items)
+    deal:{ arv:'', margin:30, costs:'', offer:'' },
+  };
+}
+
+/* unit cost resolution: project override → global override → list */
+function unitCost(itemId){
+  if(P&&P.prices[itemId]!=null) return P.prices[itemId];
+  if(GLOBAL_PRICES[itemId]!=null) return GLOBAL_PRICES[itemId];
+  const it=itemDef(itemId); return it?it.c:0;
+}
+function itemDef(itemId){
+  if(ITEMS[itemId]) return ITEMS[itemId];
+  const cu=P&&P.custom.find(c=>c.id===itemId); return cu?{n:cu.n,c:cu.c,u:cu.u,custom:1}:null;
+}
+const SID=(iid,itemId)=>iid+'::'+itemId;
+function lineTotal(iid,itemId){
+  const s=P.sel[SID(iid,itemId)]; if(!s) return 0;
+  const q=parseFloat(s.q); if(!(q>0)) return 0;
+  return q*unitCost(itemId);
+}
+
+/* items visible in a room group (defaults minus removed, plus custom) */
+function groupItems(iid,g){
+  const base=g.items.filter(id=>!P.removed[SID(iid,id)]);
+  const cu=P.custom.filter(c=>c.iid===iid&&c.groupKey===g.key).map(c=>c.id);
+  return base.concat(cu);
+}
+function roomStandalone(iid,type){
+  const base=(ROOM_TYPES[type].standalone||[]).filter(id=>!P.removed[SID(iid,id)]);
+  const cu=P.custom.filter(c=>c.iid===iid&&c.groupKey==='_standalone').map(c=>c.id);
+  return base.concat(cu);
+}
+
+/* ---- totals ---- */
+function groupTotal(iid,g){ return groupItems(iid,g).reduce((t,id)=>t+lineTotal(iid,id),0); }
+function roomTotal(r){
+  let t=0; const T=ROOM_TYPES[r.type];
+  T.groups.forEach(g=>t+=groupTotal(r.iid,g));
+  roomStandalone(r.iid,r.type).forEach(id=>t+=lineTotal(r.iid,id));
+  return t;
+}
+function grandTotal(){ return P?P.rooms.reduce((t,r)=>t+roomTotal(r),0):0; }
+
+/* progress: each group is one unit (checked if any item checked OR No-Action);
+   each standalone item is its own unit. */
+function progress(){
+  let total=0,done=0;
+  P.rooms.forEach(r=>{
+    const T=ROOM_TYPES[r.type];
+    T.groups.forEach(g=>{
+      total++;
+      const anyChecked=groupItems(r.iid,g).some(id=>P.sel[SID(r.iid,id)]?.on);
+      if(anyChecked||P.na[r.iid+'::'+g.key]) done++;
+    });
+    roomStandalone(r.iid,r.type).forEach(id=>{ total++; if(P.sel[SID(r.iid,id)]?.on) done++; });
+  });
+  return {total,done,pct:total?Math.round(done/total*100):0};
+}
+function roomChecked(r){
+  const T=ROOM_TYPES[r.type]; let n=0;
+  T.groups.forEach(g=>groupItems(r.iid,g).forEach(id=>{if(P.sel[SID(r.iid,id)]?.on)n++}));
+  roomStandalone(r.iid,r.type).forEach(id=>{if(P.sel[SID(r.iid,id)]?.on)n++});
+  return n;
+}
+
+/* ============================================================
+   5. FORMAT HELPERS
+   ============================================================ */
+const money=n=>'$'+Math.round(n).toLocaleString('en-US');
+const money2=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fmtDate(iso){try{return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}catch{return''}}
+let _saveT;
+function touch(){ if(!P)return; P.updatedAt=new Date().toISOString(); clearTimeout(_saveT); _saveT=setTimeout(persistProjects,500); }
+
+/* ============================================================
+   6. ICONS
+   ============================================================ */
+const I={
+  menu:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
+  gear:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  chart:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+  pencil:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>',
+  trash:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
+  check:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  chev:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>',
+  cam:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l2-3h8l2 3h3a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+  tag:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+  back:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>',
+};
+
+/* per-room-type glyphs (line icons, inherit currentColor) */
+const RICON_PATH={
+  interior:'<path d="M3 11l9-8 9 8"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/>',
+  kitchen:'<rect x="4" y="3" width="16" height="18" rx="2"/><line x1="4" y1="9" x2="20" y2="9"/><circle cx="8" cy="6" r="0.6"/><circle cx="11.5" cy="6" r="0.6"/>',
+  bathroom:'<path d="M12 3s5 5 5 8.5a5 5 0 0 1-10 0C7 8 12 3 12 3z"/>',
+  systems:'<path d="M13 2L5 13h6l-1 9 8-12h-6z"/>',
+  exterior:'<path d="M12 22v-5"/><path d="M12 17l-5-7h3l-3-5h10l-3 5h3z"/>',
+  bedroom:'<path d="M2 17v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5"/><line x1="2" y1="17" x2="22" y2="17"/><path d="M6 10V8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  living:'<path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3"/><path d="M2 13a2 2 0 0 1 4 0v4h12v-4a2 2 0 0 1 4 0v5H2z"/>',
+};
+function ricon(type,size){return `<svg width="${size||16}" height="${size||16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${RICON_PATH[type]||RICON_PATH.interior}</svg>`;}
+/* group glyph by key (fallback for the shared ones) */
+const GICON_PATH={
+  flooring:'<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+  paint:'<path d="M3 5a2 2 0 0 1 2-2h12v6H5a2 2 0 0 1-2-2z"/><path d="M17 5h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-7"/><path d="M12 11v4a2 2 0 0 1-2 2H9v4h2"/>',
+  doors:'<rect x="5" y="3" width="14" height="18" rx="1"/><circle cx="15" cy="12" r="1"/>',
+  pest:'<circle cx="12" cy="13" r="5"/><path d="M12 8V4M9 5l-2-2M15 5l2-2M7 13H3M21 13h-4M8 18l-2 2M16 18l2 2"/>',
+  cabinets:'<rect x="4" y="3" width="16" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21"/><circle cx="10" cy="12" r="0.6"/><circle cx="14" cy="12" r="0.6"/>',
+  counters:'<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18"/>',
+  appliances:'<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="8" y1="5" x2="8" y2="6"/>',
+  vanity:'<rect x="4" y="9" width="16" height="11" rx="1"/><path d="M4 13h16"/><circle cx="8" cy="11" r="0.6"/>',
+  tub:'<path d="M4 12h16v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"/><path d="M7 12V6a2 2 0 0 1 4 0"/><line x1="9" y1="6" x2="9" y2="7"/>',
+  tile:'<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+  hvac:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8v8M8 12h8" stroke-width="1.3"/>',
+  electrical:'<path d="M13 2L5 13h6l-1 9 8-12h-6z"/>',
+  structural:'<path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/>',
+  insulation:'<path d="M4 8c2-2 4-2 6 0s4 2 6 0 4-2 4 0M4 14c2-2 4-2 6 0s4 2 6 0 4-2 4 0"/>',
+  fence:'<path d="M4 9l2-3 2 3M4 9v9M8 9v9M12 9l2-3 2 3v9M16 9v9M2 13h20"/>',
+  siding:'<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 8h18M3 13h18M3 18h18"/>',
+  windows:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M12 3v18M4 12h16"/>',
+  garage:'<path d="M3 21V8l9-4 9 4v13"/><path d="M6 21v-9h12v9"/><path d="M6 15h12M6 18h12"/>',
+  trees:'<path d="M12 22v-5"/><path d="M12 17l-5-7h3l-3-5h10l-3 5h3z"/>',
+  closet:'<rect x="5" y="3" width="14" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21"/>',
+  lighting:'<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+};
+function gicon(key){const p=GICON_PATH[key]; if(!p) return ''; return `<svg class="g-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;}
+
+/* ============================================================
+   7. RENDER
+   ============================================================ */
+const $=s=>document.querySelector(s);
+const app=$('#app');
+
+function render(){
+  if(ui.view==='deal') app.innerHTML=viewDeal();
+  else if(ui.view==='summary') app.innerHTML=viewSummary();
+  else app.innerHTML=viewMain();
+}
+
+function header(){
+  const g=grandTotal(), pr=progress();
+  const active=P.rooms.filter(r=>roomTotal(r)>0).length;
+  return `<header class="hdr safe-t">
+    <div class="hdr-top">
+      <button class="icon-btn" data-act="open-panel" aria-label="Projects">${I.menu}</button>
+      <span class="brand">SPARK ESTIMATOR</span>
+      <div style="display:flex">
+        <button class="icon-btn" data-act="open-deal" aria-label="Deal analyzer">${I.chart}</button>
+        <button class="icon-btn" data-act="open-settings" aria-label="Settings">${I.gear}</button>
+      </div>
+    </div>
+    <div class="hdr-body">
+      <div class="kicker">Running Total</div>
+      <div class="total tnum" id="run-total">${money(g)}</div>
+      <div class="subline">
+        <span class="nm">${esc(P.name)} · ${active} active section${active!==1?'s':''}</span>
+        <button class="mini-pencil" data-act="rename-project">${I.pencil}</button>
+      </div>
+      <div class="progress-row">
+        <div class="bar"><i id="prog-fill" style="width:${pr.pct}%"></i></div>
+        <span class="lbl" id="prog-lbl">${pr.done}/${pr.total} complete</span>
+      </div>
+    </div>
+  </header>`;
+}
+
+function roomTabs(){
+  return `<nav class="tabs scroll-x" id="room-tabs">
+    ${P.rooms.map((r,i)=>{
+      const t=roomTotal(r), c=roomChecked(r), on=i===ui.room;
+      return `<button class="tab ${on?'on':''}" data-act="room" data-i="${i}">
+        ${c>0?'<span class="dot"></span>':''}
+        <span class="t-ico">${ricon(r.type,18)}</span>
+        <span class="t-name">${esc(r.name)}</span>
+        <span class="t-sub">${t>0?money(t):(c>0?c+' ✓':ROOM_TYPES[r.type].groups.length+' groups')}</span>
+      </button>`;
+    }).join('')}
+    <button class="tab-add" data-act="add-room">+ Room</button>
+  </nav>`;
+}
+
+function viewMain(){
+  const r=P.rooms[ui.room]||P.rooms[0];
+  const T=ROOM_TYPES[r.type];
+  const canRemove=P.rooms.length>1;
+  let html=header()+roomTabs()+`<div class="body" id="body">
+    <div class="sec-head">
+      <span class="t"><span class="sec-ico">${ricon(r.type,16)}</span>${esc(r.name)}</span>
+      ${canRemove?`<button class="rm" data-act="remove-room" data-iid="${r.iid}">${I.trash} Remove room</button>`
+        :`<span class="c">${T.groups.length} groups</span>`}
+    </div>`;
+  T.groups.forEach(g=>{ html+=renderGroup(r,g); });
+  const sa=roomStandalone(r.iid,r.type);
+  if(sa.length){
+    html+=`<div class="sec-head" style="margin-top:16px"><span class="t">Other — ${esc(r.name)}</span></div>`;
+    sa.forEach(id=>{ html+=renderItem(r.iid,id,true); });
+    html+=`<button class="add-item-btn" data-act="add-item" data-iid="${r.iid}" data-g="_standalone">+ Add custom item</button>`;
+  }
+  html+=`</div>`+bottomNav();
+  return html;
+}
+
+function renderGroup(r,g){
+  const iid=r.iid, gk=iid+'::'+g.key;
+  const items=groupItems(iid,g);
+  const open=ui.expanded[gk];
+  const checked=items.filter(id=>P.sel[SID(iid,id)]?.on).length;
+  const tot=groupTotal(iid,g);
+  const isNA=P.na[gk];
+  let pill='';
+  if(checked>0) pill=`<span class="pill cnt">${checked} ✓</span>`;
+  else if(isNA) pill=`<span class="pill na">No action</span>`;
+  return `<div class="group ${checked>0||isNA?'active':''}" data-gid="${gk}">
+    <button class="group-hd" data-act="toggle-group" data-gk="${gk}">
+      <span class="l"><span class="chev ${open?'open':''}">${I.chev}</span>
+        ${gicon(g.key)}<span class="gl">${g.label}</span>${pill}</span>
+      <span class="gt ${tot>0?'pos':'zero'}" data-gt="${gk}">${tot>0?money(tot):'—'}</span>
+    </button>
+    ${open?`<div class="group-bd">
+      ${naRow(gk,isNA)}
+      ${items.map(id=>renderItem(iid,id,false)).join('')}
+      <button class="add-item-btn" data-act="add-item" data-iid="${iid}" data-g="${g.key}">+ Add custom item</button>
+    </div>`:''}
+  </div>`;
+}
+
+function naRow(gk,on){
+  return `<button class="na-row item ${on?'on':''}" data-act="toggle-na" data-gk="${gk}" style="background:${on?'var(--orange-50)':'var(--slate-50)'}">
+    <span class="check ${on?'on':''}">${on?I.check:''}</span>
+    <span class="na-txt">No action needed — reviewed</span>
+  </button>`;
+}
+
+function renderItem(iid,itemId,standalone){
+  const it=itemDef(itemId); if(!it) return '';
+  const sid=SID(iid,itemId), s=P.sel[sid]||{}, on=!!s.on;
+  const tot=lineTotal(iid,itemId);
+  const cost=unitCost(itemId);
+  const note=it.note;
+  return `<div class="item ${on?'on':'off'} ${standalone?'standalone':''}" data-item="${sid}">
+    <div class="item-row">
+      <button class="check ${on?'on':''}" data-act="toggle-item" data-sid="${sid}" data-iid="${iid}" data-id="${itemId}">${on?I.check:''}</button>
+      <div class="item-main">
+        <div class="item-top">
+          <span class="item-name">${esc(it.n)}</span>
+          <span class="item-tot ${tot>0?'pos':'zero'}" data-lt="${sid}">${tot>0?money(tot):'—'}</span>
+        </div>
+        <div class="item-meta">
+          <button class="cost-edit" data-act="edit-cost" data-id="${itemId}">${money2(cost)} / ${esc(it.u)}</button>
+          ${note?`<span>· ${esc(note)}</span>`:''}
+          <span style="flex:1"></span>
+          <button class="item-x" data-act="remove-item" data-iid="${iid}" data-id="${itemId}" title="Remove">${I.trash}</button>
+        </div>
+        ${on?itemExpand(iid,itemId,it,s,sid):''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function itemExpand(iid,itemId,it,s,sid){
+  let h=`<div class="expand">
+    <div class="qty-wrap">
+      <span class="ql">Qty</span>
+      <input class="qinput" data-act="qty" data-sid="${sid}" data-iid="${iid}" data-id="${itemId}"
+        type="number" inputmode="decimal" min="0" step="any" value="${s.q??''}" placeholder="0" />
+      <span class="unit-lbl">${esc(it.u)}</span>
+    </div>`;
+  if(it.serial){
+    h+=`<div class="qty-wrap">
+      <span class="ql">Year</span>
+      <input class="qinput yr-input" data-act="year" data-sid="${sid}" type="number" inputmode="numeric"
+        min="1970" max="${new Date().getFullYear()}" value="${s.year??''}" placeholder="—" />
+    </div>`;
+  }
+  h+=`</div>`;
+  // Notes — every line item (required: each project stores its own notes)
+  h+=`<input class="note-input" data-act="note" data-sid="${sid}" value="${esc(s.note||'')}"
+        placeholder="Add a note — condition, location, reminder…" />`;
+  // Photos — every line item (camera capture). Serial items also get OCR + age check.
+  h+=attachBlock(iid,itemId,it,s,sid);
+  return h;
+}
+
+/* ---- Photos + (for equipment) serial OCR / age block ---- */
+function attachBlock(iid,itemId,it,s,sid){
+  const photos=P.photos[sid]||[];
+  const key=sid.replace(/[^a-z0-9]/gi,'');
+  const heading=it.serial?`${I.cam} Serial photo &amp; age check`:`${I.cam} Photos`;
+  return `<div class="serial-block">
+    <div class="sh">${heading}</div>
+    <div class="photos">
+      ${photos.map((ph,i)=>`<div class="photo">
+        <img src="${ph.url}" alt="photo"/>
+        <button class="px" data-act="rm-photo" data-sid="${sid}" data-i="${i}">×</button>
+        ${ph.serial?`<span class="badge">${esc(ph.serial.slice(0,12))}</span>`:''}
+      </div>`).join('')}
+      <button class="add-photo" data-act="add-photo" data-sid="${sid}" data-id="${itemId}">${I.cam}<span>${it.serial?'Scan':'Photo'}</span></button>
+    </div>
+    ${it.serial?`<div id="ocr-${key}"></div><div id="age-${key}">${ageNote(it,s)}</div>`:''}
+  </div>`;
+}
+
+/* age decoder note (Creative Feature #1) — only for serial-bearing equipment */
+function ageNote(it,s){
+  if(!s.year) return '';
+  const age=new Date().getFullYear()-Number(s.year);
+  if(!(age>=0&&age<60)) return '';
+  const life=it.life||15, left=life-age;
+  if(left<=1) return `<div class="age-note warn">⚠ <b>${age} yrs old</b> — past its ~${life}-yr service life. Budget a replacement; this is exactly the kind of hidden cost that sinks a flip.</div>`;
+  if(left<=4) return `<div class="age-note info">○ <b>${age} yrs old</b> — roughly ${left} yr${left!==1?'s':''} of life left. Inspect closely and consider replacing now.</div>`;
+  return `<div class="age-note ok">✓ <b>${age} yrs old</b> — about ${left} yrs of life remaining. Likely fine.</div>`;
+}
+
+function bottomNav(){
+  const first=ui.room===0, last=ui.room===P.rooms.length-1;
+  return `<div class="btmnav safe-b"><div class="btmnav-in">
+    <button class="nbtn ghost" data-act="prev" ${first?'disabled':''}>← Previous</button>
+    ${last
+      ? `<button class="nbtn solid" data-act="open-summary">Review & Export</button>`
+      : `<button class="nbtn solid" data-act="next">Next →</button>`}
+  </div></div>`;
+}
+
+/* ---- Summary view ---- */
+function viewSummary(){
+  const g=grandTotal();
+  let secs='';
+  P.rooms.forEach(r=>{
+    const t=roomTotal(r); if(t<=0) return;
+    const T=ROOM_TYPES[r.type]; let rows='';
+    const addRow=(id)=>{const lt=lineTotal(r.iid,id); if(lt<=0)return; const it=itemDef(id); const s=P.sel[SID(r.iid,id)];
+      const ph=(P.photos[SID(r.iid,id)]||[]).length;
+      const extra=[s.note?esc(s.note):'', ph?`📷 ${ph}`:''].filter(Boolean).join(' · ');
+      rows+=`<div class="sum-row"><span class="sn">${esc(it.n)} <small>· ${s.q} ${esc(it.u)} × ${money2(unitCost(id))}</small>${extra?`<br><small style="color:var(--slate-400)">${extra}</small>`:''}</span><span class="sv">${money(lt)}</span></div>`;};
+    T.groups.forEach(gp=>groupItems(r.iid,gp).forEach(addRow));
+    roomStandalone(r.iid,r.type).forEach(addRow);
+    secs+=`<div class="sum-sec"><div class="sum-sec-hd"><span class="sl">${esc(r.name)}</span><span class="st">${money(t)}</span></div>${rows}</div>`;
+  });
+  if(!secs) secs=`<div class="empty">No repairs selected yet.<br>Add quantities to line items to build your estimate.</div>`;
+  return `<header class="hdr safe-t">
+    <div class="hdr-top">
+      <button class="icon-btn" data-act="back-main">${I.back}</button>
+      <span class="brand">ESTIMATE SUMMARY</span>
+      <button class="icon-btn" data-act="open-deal">${I.chart}</button>
+    </div>
+    <div class="hdr-body"><div class="kicker">Total Estimate</div><div class="total tnum">${money(g)}</div>
+    <div class="subline"><span class="nm">${esc(P.name)}</span></div></div>
+  </header>
+  <div class="body" style="padding-bottom:120px">${distCard(g)}${secs}</div>
+  <div class="btmnav safe-b"><div class="btmnav-in">
+    <button class="nbtn ghost" data-act="open-deal">Deal Analysis</button>
+    <button class="nbtn solid" data-act="export" id="export-btn">⤓ Export ZIP</button>
+  </div></div>`;
+}
+
+/* cost-distribution bar across rooms (summary) */
+const DIST_COLORS=['#d2461e','#ea580c','#f59e0b','#0e7490','#0d9488','#7c3aed','#475569','#b45309','#be123c','#0369a1'];
+function distCard(g){
+  if(g<=0) return '';
+  const segs=P.rooms.map(r=>({name:r.name,total:roomTotal(r)})).filter(s=>s.total>0)
+    .sort((a,b)=>b.total-a.total).map((s,i)=>({...s,pct:s.total/g*100,color:DIST_COLORS[i%DIST_COLORS.length]}));
+  if(segs.length<=1) return '';
+  return `<div class="dist-card">
+    <div class="dt">Where the money goes</div>
+    <div class="dist">${segs.map(s=>`<span style="width:${s.pct}%;background:${s.color}" title="${esc(s.name)}"></span>`).join('')}</div>
+    <div class="dist-legend">${segs.map(s=>`<span class="lg"><span class="sw" style="background:${s.color}"></span>${esc(s.name)} <b>${money(s.total)}</b> <span class="pc">${Math.round(s.pct)}%</span></span>`).join('')}</div>
+  </div>`;
+}
+
+/* ============================================================
+   8. DEAL ANALYZER  (Creative Feature #2)
+   ============================================================ */
+function viewDeal(){
+  const repairs=grandTotal();
+  const d=P.deal;
+  const arv=parseFloat(d.arv)||0;
+  const margin=parseFloat(d.margin)||0;
+  const costs=parseFloat(d.costs)||0;
+  // Maximum Allowable Offer = ARV·(1-margin) − repairs − holding/closing costs
+  const mao=arv>0?Math.max(0, arv*(1-margin/100)-repairs-costs):0;
+  const offer=parseFloat(d.offer);
+  const hasOffer=!isNaN(offer)&&offer>0;
+  const profit=hasOffer?arv-offer-repairs-costs:(arv>0?arv-mao-repairs-costs:0);
+  const profitPct=arv>0?profit/arv*100:0;
+  let verdict='',vclass='';
+  if(arv>0){
+    if(!hasOffer){ verdict=`Offer at or below ${money(mao)} to hit your ${margin}% margin.`; vclass='go'; }
+    else if(profit>=arv*margin/100){ verdict=`GO — ${money(profit)} projected profit (${profitPct.toFixed(0)}% of ARV).`; vclass='go'; }
+    else if(profit>0){ verdict=`TIGHT — only ${money(profit)} profit (${profitPct.toFixed(0)}%). Below your ${margin}% target.`; vclass='tight'; }
+    else { verdict=`NO — this deal loses ${money(-profit)} at that price.`; vclass='no'; }
+  }
+  return `<header class="hdr safe-t">
+    <div class="hdr-top"><button class="icon-btn" data-act="back-main">${I.back}</button>
+      <span class="brand">DEAL ANALYZER</span><span style="width:38px"></span></div>
+    <div class="hdr-body"><div class="kicker">Repair Estimate</div><div class="total tnum">${money(repairs)}</div>
+    <div class="subline"><span class="nm">${esc(P.name)}</span></div></div>
+  </header>
+  <div class="body" style="padding-bottom:40px">
+    <div class="deal-hero">
+      <div class="dl">Maximum Allowable Offer</div>
+      <div class="dv tnum">${arv>0?money(mao):'—'}</div>
+      <div class="dsub">Most you can pay and still clear a ${margin||0}% margin after repairs &amp; costs.</div>
+      ${arv>0?`<div class="verdict ${vclass}">${verdict}</div>`:''}
+    </div>
+    <div class="set-card">
+      <div class="field"><label>After-Repair Value (ARV) — what it sells for renovated</label>
+        <input type="number" inputmode="decimal" data-act="deal" data-f="arv" value="${d.arv}" placeholder="e.g. 210000"/></div>
+      <div class="row2">
+        <div class="field"><label>Target margin %</label>
+          <input type="number" inputmode="decimal" data-act="deal" data-f="margin" value="${d.margin}" placeholder="30"/></div>
+        <div class="field"><label>Holding + closing costs $</label>
+          <input type="number" inputmode="decimal" data-act="deal" data-f="costs" value="${d.costs}" placeholder="e.g. 18000"/></div>
+      </div>
+      <div class="field"><label>Your actual offer (optional) — test a price</label>
+        <input type="number" inputmode="decimal" data-act="deal" data-f="offer" value="${d.offer}" placeholder="e.g. 95000"/></div>
+    </div>
+    <div class="set-card">
+      <div class="deal-line"><span>After-Repair Value</span><span class="v">${money(arv)}</span></div>
+      <div class="deal-line"><span>– Repair estimate</span><span class="v neg">${money(repairs)}</span></div>
+      <div class="deal-line"><span>– Holding &amp; closing</span><span class="v neg">${money(costs)}</span></div>
+      <div class="deal-line"><span>– ${hasOffer?'Your offer':'Max offer (MAO)'}</span><span class="v neg">${money(hasOffer?offer:mao)}</span></div>
+      <div class="deal-line grand"><span>Projected profit</span><span class="v ${profit<0?'neg':''}">${money(profit)}</span></div>
+    </div>
+    <p style="font-size:11.5px;color:var(--slate-400);padding:0 4px;line-height:1.5">
+      MAO = ARV × (1 − margin) − repairs − costs. The repair number flows live from your walkthrough, so the offer
+      updates the instant you check a furnace or a tile tear-out. This is the number that decides the deal.</p>
+  </div>`;
+}
+
+/* ============================================================
+   9. EVENT HANDLING  (delegation)
+   ============================================================ */
+let _modalCb=null;
+
+document.addEventListener('click',e=>{
+  const x=e.target.closest('[data-x]'); if(x){ closeLayer(x.dataset.x); return; }
+  const el=e.target.closest('[data-act]'); if(!el) return;
+  const a=el.dataset.act;
+  switch(a){
+    case 'open-panel': openPanel(); break;
+    case 'new-project': doNewProject(); break;
+    case 'rename-project': renameProject(); break;
+    case 'open-settings': openSettings(); break;
+    case 'open-deal': ui.view='deal'; render(); break;
+    case 'open-summary': ui.view='summary'; render(); window.scrollTo(0,0); break;
+    case 'back-main': ui.view='main'; render(); break;
+    case 'room': ui.room=+el.dataset.i; ui.view='main'; render(); $('#body')?.scrollTo(0,0); break;
+    case 'add-room': openAddRoom(); break;
+    case 'remove-room': removeRoom(el.dataset.iid); break;
+    case 'prev': if(ui.room>0){ui.room--;render();$('#body')?.scrollTo(0,0);} break;
+    case 'next': if(ui.room<P.rooms.length-1){ui.room++;render();$('#body')?.scrollTo(0,0);} break;
+    case 'toggle-group': toggleGroup(el.dataset.gk); break;
+    case 'toggle-na': toggleNA(el.dataset.gk); break;
+    case 'toggle-item': toggleItem(el.dataset.sid,el.dataset.iid,el.dataset.id); break;
+    case 'edit-cost': editCost(el.dataset.id); break;
+    case 'remove-item': removeItem(el.dataset.iid,el.dataset.id); break;
+    case 'add-item': addCustomItem(el.dataset.iid,el.dataset.g); break;
+    case 'add-photo': startPhoto(el.dataset.sid,el.dataset.id); break;
+    case 'rm-photo': removePhoto(el.dataset.sid,+el.dataset.i); break;
+    case 'export': doExport(); break;
+  }
+});
+
+/* live inputs (no re-render → smooth typing) */
+document.addEventListener('input',e=>{
+  const el=e.target.closest('[data-act]'); if(!el) return;
+  const a=el.dataset.act;
+  if(a==='qty'){ onQty(el); }
+  else if(a==='year'){ onYear(el); }
+  else if(a==='note'){ const sid=el.dataset.sid; (P.sel[sid]=P.sel[sid]||{on:true}).note=el.value; touch(); }
+  else if(a==='deal'){ P.deal[el.dataset.f]=el.value; touch(); scheduleDealRefresh(); }
+});
+
+function onQty(el){
+  const sid=el.dataset.sid;
+  (P.sel[sid]=P.sel[sid]||{on:true}).q=el.value;
+  P.sel[sid].on=true;
+  patchTotals(sid,el.dataset.iid,el.dataset.id);
+  touch();
+}
+function onYear(el){
+  const sid=el.dataset.sid;
+  (P.sel[sid]=P.sel[sid]||{on:true}).year=el.value;
+  touch();
+  // refresh only the age-decoder note (keeps the year field focused)
+  const key=sid.replace(/[^a-z0-9]/gi,'');
+  const ageEl=document.getElementById('age-'+key);
+  if(ageEl){ const id=sid.split('::')[1]; ageEl.innerHTML=ageNote(itemDef(id),P.sel[sid]); }
+}
+
+let _dealT;
+function scheduleDealRefresh(){ clearTimeout(_dealT); _dealT=setTimeout(()=>{ if(ui.view==='deal'){ const sc=app.querySelector('.body').scrollTop; render(); app.querySelector('.body').scrollTop=sc; } },350); }
+
+/* patch only the affected totals after a qty edit */
+function patchTotals(sid,iid,itemId){
+  const lt=lineTotal(iid,itemId);
+  const ltEl=document.querySelector(`[data-lt="${cssEsc(sid)}"]`);
+  if(ltEl){ ltEl.textContent=lt>0?money(lt):'—'; ltEl.className='item-tot '+(lt>0?'pos':'zero'); }
+  // group total
+  const r=P.rooms.find(rr=>rr.iid===iid);
+  if(r){ ROOM_TYPES[r.type].groups.forEach(g=>{
+    if(groupItems(iid,g).includes(itemId)){
+      const gt=groupTotal(iid,g); const gk=iid+'::'+g.key;
+      const gtEl=document.querySelector(`[data-gt="${cssEsc(gk)}"]`);
+      if(gtEl){ gtEl.textContent=gt>0?money(gt):'—'; gtEl.className='gt '+(gt>0?'pos':'zero'); }
+    }
+  }); }
+  // running total + progress
+  const rt=$('#run-total'); if(rt) rt.textContent=money(grandTotal());
+  const pr=progress(); const pf=$('#prog-fill'),pl=$('#prog-lbl');
+  if(pf) pf.style.width=pr.pct+'%'; if(pl) pl.textContent=`${pr.done}/${pr.total} complete`;
+}
+const cssEsc=s=>s.replace(/([^a-zA-Z0-9_-])/g,'\\$1');
+
+function toggleGroup(gk){ ui.expanded[gk]=!ui.expanded[gk]; render(); }
+function toggleNA(gk){
+  P.na[gk]=!P.na[gk]; touch(); render();
+}
+function toggleItem(sid,iid,id){
+  const s=P.sel[sid]=P.sel[sid]||{};
+  s.on=!s.on;
+  if(s.on&&(s.q==null||s.q==='')){ const it=itemDef(id); if(it&&it.u==='ea.') s.q=s.q||''; }
+  touch(); render();
+  if(P.sel[sid].on){ setTimeout(()=>{ const inp=document.querySelector(`input[data-act="qty"][data-sid="${cssEsc(sid)}"]`); inp?.focus(); },40); }
+}
+
+/* ---- price override (per project) ---- */
+function editCost(itemId){
+  const it=itemDef(itemId); const cur=unitCost(itemId);
+  openModal(`Edit unit cost`, `<div class="field"><label>${esc(it.n)} — $ per ${esc(it.u)}</label>
+    <input id="m-cost" type="number" inputmode="decimal" step="any" value="${cur}" /></div>
+    <p style="font-size:11.5px;color:var(--slate-400);margin:0 0 4px">Applies to this project only. Use Settings → global prices to change it everywhere.</p>`,
+    ()=>{ const v=parseFloat($('#m-cost').value); if(!isNaN(v)){ P.prices[itemId]=v; touch(); render(); toast('Price updated for this project'); } },
+    P.prices[itemId]!=null?{label:'Reset',fn:()=>{delete P.prices[itemId];touch();render();toast('Reset to standard price');}}:null);
+}
+
+function removeItem(iid,id){
+  const it=itemDef(id);
+  if(it&&it.custom){ P.custom=P.custom.filter(c=>c.id!==id); delete P.sel[SID(iid,id)]; touch(); render(); toast('Item deleted'); return; }
+  P.removed[SID(iid,id)]=true; delete P.sel[SID(iid,id)]; touch(); render(); toast('Item removed — re-add from "Add custom item"');
+}
+
+function addCustomItem(iid,gkey){
+  openModal('Add custom line item',
+    `<div class="field"><label>Item name</label><input id="m-n" placeholder="e.g. Skylight replacement"/></div>
+     <div class="row2"><div class="field"><label>Unit cost $</label><input id="m-c" type="number" inputmode="decimal" step="any" placeholder="0.00"/></div>
+     <div class="field"><label>Unit</label><input id="m-u" placeholder="ea."/></div></div>`,
+    ()=>{
+      const n=$('#m-n').value.trim(), c=parseFloat($('#m-c').value), u=$('#m-u').value.trim()||'ea.';
+      if(!n||isNaN(c)){ toast('Enter a name and cost'); return false; }
+      const id='cu'+Date.now().toString(36)+Math.random().toString(36).slice(2,4);
+      P.custom.push({id,iid,groupKey:gkey,n,c,u});
+      P.sel[SID(iid,id)]={on:true,q:''}; touch(); render(); toast('Item added');
+    });
+}
+
+/* ============================================================
+   10. ROOMS
+   ============================================================ */
+function openAddRoom(){
+  const present=new Set(P.rooms.map(r=>r.type));
+  const cards=Object.entries(ROOM_TYPES).map(([type,T])=>{
+    const dis=T.singleton&&present.has(type);
+    const groups=T.groups.map(g=>g.label).join(', ');
+    return `<button class="rt ${dis?'dis':''}" data-act-room="${type}">
+      <div class="rt-n">${T.label}${T.multi?' +':''}</div>
+      <div class="rt-g">${groups}</div>
+      ${dis?'<div class="rt-g" style="color:var(--orange-600)">Already added</div>':''}
+    </button>`;
+  }).join('');
+  openSheet('Add a room',`<p style="font-size:13px;color:var(--slate-500);margin:0 0 14px">Every house is different. Add bathrooms, bedrooms, or common areas as you walk — each gets its own set of repair groups.</p>
+    <div class="rt-grid">${cards}</div>`);
+  $('#sheet-inner').querySelectorAll('[data-act-room]').forEach(b=>{
+    b.addEventListener('click',()=>addRoom(b.dataset.actRoom));
+  });
+}
+function addRoom(type){
+  const T=ROOM_TYPES[type];
+  let name=T.label, iid;
+  if(T.multi){
+    const n=P.rooms.filter(r=>r.type===type).length+1;
+    name=`${T.base} ${n}`; iid=`r-${type}-${Date.now().toString(36)}`;
+  } else {
+    iid=`r-${type}`;
+  }
+  P.rooms.push({iid,type,name});
+  ui.room=P.rooms.length-1; touch(); closeLayer('sheet'); render();
+  toast(`${name} added`);
+}
+function removeRoom(iid){
+  const r=P.rooms.find(x=>x.iid===iid); if(!r) return;
+  confirmModal(`Remove ${r.name}?`, `All selections and photos in this room will be deleted.`, ()=>{
+    P.rooms=P.rooms.filter(x=>x.iid!==iid);
+    Object.keys(P.sel).forEach(k=>{if(k.startsWith(iid+'::'))delete P.sel[k]});
+    Object.keys(P.photos).forEach(k=>{if(k.startsWith(iid+'::'))delete P.photos[k]});
+    Object.keys(P.na).forEach(k=>{if(k.startsWith(iid+'::'))delete P.na[k]});
+    P.custom=P.custom.filter(c=>c.iid!==iid);
+    if(ui.room>=P.rooms.length) ui.room=P.rooms.length-1;
+    touch(); render(); toast('Room removed');
+  });
+}
+
+/* ============================================================
+   11. PHOTOS + OCR  (Creative Feature #1)
+   ============================================================ */
+let _photoTarget=null;
+const photoInput=$('#photo-input');
+function startPhoto(sid,itemId){ _photoTarget={sid,itemId}; photoInput.value=''; photoInput.click(); }
+photoInput.addEventListener('change',async()=>{
+  const f=photoInput.files[0]; if(!f||!_photoTarget) return;
+  const {sid,itemId}=_photoTarget;
+  const url=await downscale(f,1280,0.72);
+  const ph={id:'ph'+Date.now().toString(36),url,ts:Date.now()};
+  (P.photos[sid]=P.photos[sid]||[]).push(ph);
+  touch(); render();
+  // OCR only for equipment that carries a serial / age (best-effort)
+  if(itemDef(itemId)?.serial) runOCR(sid,itemId,ph);
+});
+function removePhoto(sid,i){ (P.photos[sid]||[]).splice(i,1); touch(); render(); }
+
+function downscale(file,max,q){
+  return new Promise(res=>{
+    const img=new Image(); const rd=new FileReader();
+    rd.onload=()=>{ img.onload=()=>{
+      let{width:w,height:h}=img; if(w>max||h>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      res(cv.toDataURL('image/jpeg',q));
+    }; img.src=rd.result; };
+    rd.readAsDataURL(file);
+  });
+}
+
+/* lazy-load Tesseract only when first needed */
+let _tessP=null;
+function loadTesseract(){
+  if(_tessP) return _tessP;
+  _tessP=new Promise((res,rej)=>{
+    if(window.Tesseract) return res(window.Tesseract);
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=()=>res(window.Tesseract); s.onerror=()=>rej(new Error('offline'));
+    document.head.appendChild(s);
+  });
+  return _tessP;
+}
+function ocrBox(sid){ return document.getElementById('ocr-'+sid.replace(/[^a-z0-9]/gi,'')); }
+async function runOCR(sid,itemId,ph){
+  const box=ocrBox(sid); if(box) box.innerHTML=`<div class="age-note info"><span class="spinner dark"></span> Reading nameplate for a serial / year…</div>`;
+  let T;
+  try{ T=await loadTesseract(); }
+  catch{ if(box) box.innerHTML=`<div class="age-note info">Offline — OCR needs one online load first. You can type the year manually above.</div>`; return; }
+  try{
+    const {data}=await T.recognize(ph.url,'eng');
+    const text=(data.text||'').replace(/\n/g,' ');
+    const dec=decodeSerial(text,itemId);
+    ph.serial=dec.serial||''; ph.year=dec.year||'';
+    if(dec.year){
+      const s=P.sel[sid]=P.sel[sid]||{on:true};
+      if(!s.year) s.year=dec.year;
+    }
+    touch();
+    if(box){
+      if(dec.year) box.innerHTML=`<div class="age-note ok">Detected <b>${dec.serial?'serial '+esc(dec.serial)+', ':''}</b>manufacture year <b>${dec.year}</b> ${dec.method?'· '+dec.method:''}. Applied above — edit if wrong.</div>`;
+      else if(dec.serial) box.innerHTML=`<div class="age-note info">Read serial <b>${esc(dec.serial)}</b> but couldn't decode a year. Enter it manually above.</div>`;
+      else box.innerHTML=`<div class="age-note info">No serial detected — try a sharper, closer photo of the metal nameplate, or type the year manually.</div>`;
+    }
+    if(dec.year) render();
+  }catch{ if(box) box.innerHTML=`<div class="age-note info">Couldn't read that photo. Type the year manually above.</div>`; }
+}
+
+/* Pragmatic multi-brand serial → manufacture-year decoder.
+   Honest best-effort: covers the common HVAC / water-heater patterns,
+   always falls back to a plain 4-digit year, user can override. */
+function decodeSerial(raw,itemId){
+  const text=raw.toUpperCase();
+  const yr=new Date().getFullYear();
+  // candidate serial = longest alphanumeric run (>=6)
+  const runs=(text.match(/[A-Z0-9]{6,}/g)||[]).sort((a,b)=>b.length-a.length);
+  const serial=runs[0]||'';
+  const plausible=y=>y>=1980&&y<=yr;
+  // 1) explicit 4-digit year anywhere
+  let m=text.match(/\b(19[89]\d|20[0-4]\d)\b/);
+  if(m&&plausible(+m[1])) return {serial,year:+m[1],method:'year on label'};
+  if(serial){
+    const d4=serial.slice(0,4).replace(/\D/g,'');
+    // 2) Carrier / ICP / Heil / Tempstar: WWYY  (week 01-53 + year)
+    if(/^\d{4}/.test(serial)){
+      const ww=+serial.slice(0,2), yy=+serial.slice(2,4);
+      if(ww>=1&&ww<=53){ const y=2000+yy<=yr?2000+yy:1900+yy; if(plausible(y)) return {serial,year:y,method:'Carrier/ICP week-year'}; }
+      // 3) Rheem / Ruud / GE: YYWW
+      const y2=2000+ +serial.slice(0,2)<=yr?2000+ +serial.slice(0,2):1900+ +serial.slice(0,2);
+      const wk=+serial.slice(2,4);
+      if(wk>=1&&wk<=53&&plausible(y2)) return {serial,year:y2,method:'Rheem year-week'};
+    }
+    // 4) Trane / American Standard (post-2002): 1st char = year digit within decade, 2nd = ... hard; try 2-digit
+    const yy2=serial.match(/^[A-Z]?(\d{2})/);
+    if(yy2){ const y=2000+ +yy2[1]; if(plausible(y)&&y<=yr) return {serial,year:y,method:'2-digit prefix (verify)'}; }
+  }
+  return {serial,year:null};
+}
+
+/* ============================================================
+   12. PROJECT PANEL
+   ============================================================ */
+function openPanel(){ refreshPanel(); $('#panel').classList.add('show'); $('#overlay').classList.add('show'); }
+function refreshPanel(){
+  const list=$('#panel-list');
+  if(!PROJECTS.length){ list.innerHTML=`<div class="empty">No saved projects yet</div>`; return; }
+  list.innerHTML=PROJECTS.map(p=>{
+    const on=p.id===P?.id;
+    const tot=on?grandTotal():projectTotal(p);
+    return `<div class="pj ${on?'on':''}">
+      <button class="pj-main" data-open="${p.id}">
+        <div class="pj-name">${esc(p.name)}</div>
+        <div class="pj-meta">${fmtDate(p.updatedAt)}${on?' · Active':''}</div>
+        ${tot>0?`<div class="pj-tot">${money(tot)}</div>`:''}
+      </button>
+      <div class="pj-acts">
+        <button data-ren="${p.id}">${I.pencil}</button>
+        ${!on?`<button class="del" data-del="${p.id}">${I.trash}</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openProject(b.dataset.open));
+  list.querySelectorAll('[data-ren]').forEach(b=>b.onclick=()=>renameProjectById(b.dataset.ren));
+  list.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteProject(b.dataset.del));
+}
+function projectTotal(p){ const save=P; P=p; const t=grandTotal(); P=save; return t; }
+
+function openProject(id){
+  persistProjects(); const p=PROJECTS.find(x=>x.id===id); if(!p) return;
+  P=p; ui.room=0; ui.view='main'; ui.expanded={};
+  save(K_LAST,id); closeLayer('panel'); render();
+}
+function doNewProject(){
+  openModal('New estimate',`<div class="field"><label>Property address / name</label>
+    <input id="m-name" placeholder="e.g. 123 Main St" /></div>`,()=>{
+    const name=$('#m-name').value.trim()||'New Estimate';
+    persistProjects(); const np=blankProject(name); PROJECTS.unshift(np); P=np;
+    ui.room=0; ui.view='main'; ui.expanded={}; save(K_LAST,np.id);
+    persistProjects(); closeLayer('panel'); render(); toast('Project created');
+  });
+}
+function renameProject(){ renameProjectById(P.id); }
+function renameProjectById(id){
+  const p=PROJECTS.find(x=>x.id===id); if(!p) return;
+  openModal('Rename project',`<div class="field"><label>Name</label><input id="m-name" value="${esc(p.name)}"/></div>`,()=>{
+    const v=$('#m-name').value.trim(); if(!v) return false;
+    p.name=v; p.updatedAt=new Date().toISOString(); persistProjects();
+    if(P.id===id) render(); refreshPanel();
+  });
+}
+function deleteProject(id){
+  const p=PROJECTS.find(x=>x.id===id); if(!p) return;
+  confirmModal(`Delete "${p.name}"?`,'This cannot be undone.',()=>{
+    PROJECTS=PROJECTS.filter(x=>x.id!==id); persistProjects(); refreshPanel();
+  });
+}
+
+/* ============================================================
+   13. SETTINGS  (global price list via CSV)
+   ============================================================ */
+function openSettings(){
+  const overrides=Object.keys(GLOBAL_PRICES).length;
+  openSheet('Settings',`
+    <div class="status ${overrides?'act':'def'}">${overrides?`Using ${overrides} updated global price${overrides>1?'s':''}`:'Using default prices from the official list'}</div>
+    <div class="set-card">
+      <h4>Global price schedule</h4>
+      <p>Upload a CSV to update standard unit costs everywhere — changes roll out across every project. Only <b>id</b> and <b>cost</b> columns are used. Re-download the template, edit the numbers, re-upload.</p>
+      <label class="upload-lbl">Upload prices (CSV)<input type="file" accept=".csv,text/csv" id="csv2" style="display:none"></label>
+      <button class="btn-line" data-act-dl="1">Download current price template</button>
+      ${overrides?`<button class="btn-line" style="color:var(--red);border-color:var(--red-50)" data-act-reset="1">Reset all global prices to default</button>`:''}
+    </div>
+    <div class="set-card">
+      <h4>About</h4>
+      <p style="margin:0">Spark Estimator · offline-first PWA. All data lives on this device in localStorage — nothing is uploaded. Built for the Spark Homes acquisition team.</p>
+    </div>`);
+  $('#csv2').addEventListener('change',e=>importCSV(e.target.files[0]));
+  $('#sheet-inner').querySelector('[data-act-dl]')?.addEventListener('click',downloadTemplate);
+  $('#sheet-inner').querySelector('[data-act-reset]')?.addEventListener('click',()=>{
+    GLOBAL_PRICES={}; save(K_GP,GLOBAL_PRICES); closeLayer('sheet'); render(); toast('Global prices reset');
+  });
+}
+function importCSV(file){
+  if(!file) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const rows=parseCSV(rd.result); let n=0;
+      rows.forEach(r=>{ const id=(r.id||'').trim(); const c=parseFloat(r.cost);
+        if(id&&!isNaN(c)){ GLOBAL_PRICES[id]=c; n++; } });
+      save(K_GP,GLOBAL_PRICES); closeLayer('sheet'); render();
+      toast(`Updated ${n} price${n!==1?'s':''} globally`);
+    }catch{ toast('Could not read that CSV'); }
+  };
+  rd.readAsText(file);
+}
+function parseCSV(text){
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+  const split=l=>{const o=[];let c='',q=false;for(let i=0;i<l.length;i++){const ch=l[i];
+    if(ch==='"'){ if(q&&l[i+1]==='"'){c+='"';i++;} else q=!q; }
+    else if(ch===','&&!q){o.push(c);c='';} else c+=ch;} o.push(c); return o.map(s=>s.trim());};
+  const head=split(lines[0]).map(h=>h.toLowerCase());
+  return lines.slice(1).map(l=>{const v=split(l);return Object.fromEntries(head.map((h,i)=>[h,v[i]??'']));});
+}
+function downloadTemplate(){
+  let csv='id,name,cost,unit\n';
+  Object.entries(ITEMS).forEach(([id,it])=>{ csv+=`${id},"${it.n.replace(/"/g,'""')}",${unitCost(id)},"${it.u}"\n`; });
+  const blob=new Blob([csv],{type:'text/csv'}); const u=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=u; a.download='spark-prices.csv'; a.click(); URL.revokeObjectURL(u);
+}
+
+/* ============================================================
+   14. EXPORT  →  ZIP (styled Excel + photos)
+   ============================================================ */
+async function doExport(){
+  const btn=$('#export-btn'); if(btn){ btn.innerHTML='<span class="spinner"></span> Building…'; btn.disabled=true; }
+  try{
+    if(typeof XLSX==='undefined'){ toast('Export library still loading — try again in a moment'); resetExport(btn); return; }
+    const wb=buildWorkbook();
+    const xlsxData=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+    const JSZip=XLSX.JSZip||window.JSZip;
+    const safe=P.name.replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-')||'estimate';
+    if(!JSZip){ // fallback: download xlsx only
+      dl(new Blob([xlsxData],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`${safe}-estimate.xlsx`);
+      toast('Exported Excel (zip unavailable)'); resetExport(btn); return;
+    }
+    const zip=new JSZip();
+    zip.file(`${safe}-estimate.xlsx`,xlsxData);
+    // photos
+    const pdir=zip.folder('photos'); let pc=0;
+    P.rooms.forEach(r=>{
+      const T=ROOM_TYPES[r.type];
+      const ids=[...T.groups.flatMap(g=>groupItems(r.iid,g)),...roomStandalone(r.iid,r.type)];
+      ids.forEach(id=>{ const arr=P.photos[SID(r.iid,id)]||[];
+        arr.forEach((ph,i)=>{ const b64=ph.url.split(',')[1]; if(!b64) return;
+          const it=itemDef(id); const nm=`${r.name}-${(it?.n||id)}-${i+1}`.replace(/[^\w-]+/g,'_');
+          pdir.file(`${nm}.jpg`,b64,{base64:true}); pc++; }); });
+    });
+    if(pc===0) zip.remove('photos');
+    const content=await zip.generateAsync({type:'blob'});
+    dl(content,`${safe}-estimate.zip`);
+    toast(`Exported · ${pc} photo${pc!==1?'s':''} included`);
+  }catch(err){ console.error(err); toast('Export failed — see console'); }
+  resetExport(btn);
+}
+function resetExport(btn){ if(btn){ btn.innerHTML='⤓ Export ZIP'; btn.disabled=false; } }
+function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
+
+function buildWorkbook(){
+  const O='D2461E', INK='111827';
+  const head=(t,fill,color)=>({v:t,t:'s',s:{font:{bold:true,sz:11,color:{rgb:color||'FFFFFF'}},fill:{fgColor:{rgb:fill}},alignment:{vertical:'center'}}});
+  const cell=(v,o={})=>({v,t:typeof v==='number'?'n':'s',s:Object.assign({font:{sz:10}},o)});
+  const rows=[];
+  rows.push([cell(P.name,{font:{bold:true,sz:16,color:{rgb:INK}}}),cell(''),cell(''),cell(''),cell('')]);
+  rows.push([cell('Repair Cost Estimate · '+new Date().toLocaleDateString(),{font:{sz:10,color:{rgb:'6B7280'}}})]);
+  rows.push([]);
+  rows.push([head('Section / Room',O),head('Group',O),head('Line Item',O),head('Qty / Unit',O),head('Unit Cost',O),head('Line Total',O),head('Notes',O)]);
+  let grand=0;
+  P.rooms.forEach(r=>{
+    const T=ROOM_TYPES[r.type]; const blocks=[];
+    const noteOf=id=>{const s=P.sel[SID(r.iid,id)]||{};const ph=(P.photos[SID(r.iid,id)]||[]).length;
+      return [s.note||'', ph?`[${ph} photo${ph>1?'s':''}]`:''].filter(Boolean).join(' ');};
+    T.groups.forEach(g=>{ groupItems(r.iid,g).forEach(id=>{ const lt=lineTotal(r.iid,id); if(lt<=0) return;
+      const it=itemDef(id),s=P.sel[SID(r.iid,id)]; blocks.push([r.name,g.label,it.n,`${s.q} ${it.u}`,unitCost(id),lt,noteOf(id)]); }); });
+    roomStandalone(r.iid,r.type).forEach(id=>{ const lt=lineTotal(r.iid,id); if(lt<=0) return;
+      const it=itemDef(id),s=P.sel[SID(r.iid,id)]; blocks.push([r.name,'—',it.n,`${s.q} ${it.u}`,unitCost(id),lt,noteOf(id)]); });
+    if(!blocks.length) return;
+    let rt=0;
+    blocks.forEach(b=>{ rt+=b[5]; grand+=b[5];
+      rows.push([cell(b[0]),cell(b[1]),cell(b[2]),cell(b[3]),cell(b[4],{numFmt:'$#,##0.00'}),cell(b[5],{numFmt:'$#,##0',font:{bold:true,sz:10}}),cell(b[6],{font:{sz:9,color:{rgb:'6B7280'}}})]); });
+    rows.push([cell(''),cell(''),cell(''),cell(''),cell(r.name+' subtotal',{font:{bold:true,sz:10,color:{rgb:INK}},alignment:{horizontal:'right'}}),cell(rt,{numFmt:'$#,##0',font:{bold:true,sz:10,color:{rgb:'C2410C'}}})]);
+  });
+  rows.push([]);
+  rows.push([cell('GRAND TOTAL',{font:{bold:true,sz:13,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:INK}}}),cell('',{fill:{fgColor:{rgb:INK}}}),cell('',{fill:{fgColor:{rgb:INK}}}),cell('',{fill:{fgColor:{rgb:INK}}}),cell('',{fill:{fgColor:{rgb:INK}}}),cell(grand,{numFmt:'$#,##0',font:{bold:true,sz:13,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:INK}}})]);
+  // deal analysis appendix
+  const d=P.deal, arv=parseFloat(d.arv)||0;
+  if(arv>0){ const costs=parseFloat(d.costs)||0,margin=parseFloat(d.margin)||0;
+    const mao=Math.max(0,arv*(1-margin/100)-grand-costs);
+    rows.push([]); rows.push([cell('Deal Analysis',{font:{bold:true,sz:12,color:{rgb:INK}}})]);
+    rows.push([cell('After-Repair Value'),cell(''),cell(''),cell(''),cell(''),cell(arv,{numFmt:'$#,##0'})]);
+    rows.push([cell('Target margin'),cell(''),cell(''),cell(''),cell(''),cell(margin/100,{numFmt:'0%'})]);
+    rows.push([cell('Holding & closing'),cell(''),cell(''),cell(''),cell(''),cell(costs,{numFmt:'$#,##0'})]);
+    rows.push([cell('Maximum Allowable Offer',{font:{bold:true}}),cell(''),cell(''),cell(''),cell(''),cell(mao,{numFmt:'$#,##0',font:{bold:true,color:{rgb:'C2410C'}}})]);
+  }
+  const ws=XLSX.utils.aoa_to_sheet(rows.map(r=>r.map(c=>c&&c.v!==undefined?c:cell(c==null?'':c))));
+  ws['!cols']=[{wch:20},{wch:20},{wch:38},{wch:16},{wch:12},{wch:13},{wch:30}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Estimate'); return wb;
+}
+
+/* ============================================================
+   15. MODALS / SHEETS / TOAST
+   ============================================================ */
+function openModal(title,bodyHTML,onSave,secondary){
+  _modalCb=onSave;
+  $('#modal-inner').innerHTML=`<h3>${esc(title)}</h3>${bodyHTML}
+    <div class="modal-acts">
+      ${secondary?`<button class="btn-cancel" id="m-second">${esc(secondary.label)}</button>`:`<button class="btn-cancel" data-x="modal">Cancel</button>`}
+      <button class="btn-save" id="m-save">Save</button>
+    </div>`;
+  $('#modal').classList.add('show');
+  const first=$('#modal-inner input'); if(first) setTimeout(()=>{first.focus();first.select&&first.select();},60);
+  $('#m-save').onclick=()=>{ const r=onSave&&onSave(); if(r!==false) closeLayer('modal'); };
+  if(secondary) $('#m-second').onclick=()=>{ secondary.fn(); closeLayer('modal'); };
+  $('#modal-inner').querySelectorAll('input').forEach(inp=>inp.addEventListener('keydown',e=>{if(e.key==='Enter'){$('#m-save').click();}}));
+}
+function confirmModal(title,msg,onYes){
+  $('#modal-inner').innerHTML=`<h3>${esc(title)}</h3><p style="font-size:13.5px;color:var(--slate-500);margin:0 0 18px">${esc(msg)}</p>
+    <div class="modal-acts"><button class="btn-cancel" data-x="modal">Cancel</button><button class="btn-danger" id="m-yes">Delete</button></div>`;
+  $('#modal').classList.add('show');
+  $('#m-yes').onclick=()=>{ onYes(); closeLayer('modal'); };
+}
+function openSheet(title,bodyHTML){
+  $('#sheet-inner').innerHTML=`<div class="sheet-hd"><h2>${esc(title)}</h2><button class="icon-btn" style="color:var(--slate-400)" data-x="sheet">✕</button></div><div class="sheet-bd">${bodyHTML}</div>`;
+  $('#sheet').classList.add('show');
+}
+function closeLayer(which){
+  if(which==='panel'){ $('#panel').classList.remove('show'); $('#overlay').classList.remove('show'); }
+  else if(which==='modal'){ $('#modal').classList.remove('show'); }
+  else if(which==='sheet'){ $('#sheet').classList.remove('show'); }
+}
+$('#overlay').addEventListener('click',()=>closeLayer('panel'));
+let _toastT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+/* ============================================================
+   16. BOOT
+   ============================================================ */
+function boot(){
+  const params=new URLSearchParams(location.search);
+  if(params.get('new')==='1'){ const np=blankProject('New Estimate'); PROJECTS.unshift(np); P=np; persistProjects(); }
+  else {
+    const lastId=load(K_LAST,null);
+    P=PROJECTS.find(p=>p.id===lastId)||PROJECTS[0];
+    if(!P){ P=blankProject('123 Main St — Demo'); PROJECTS.unshift(P); persistProjects(); }
+  }
+  // migrate: ensure all expected fields exist
+  ['sel','photos','na','prices','removed'].forEach(k=>P[k]=P[k]||{});
+  P.custom=P.custom||[]; P.deal=P.deal||{arv:'',margin:30,costs:'',offer:''};
+  save(K_LAST,P.id);
+  render();
+}
+boot();
+
+/* service worker */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
