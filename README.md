@@ -1,5 +1,7 @@
 # Spark Estimator
 
+**▶ Live app:** https://ashritkvs.github.io/spark-estimator/ — open on a phone (Chrome Android / Safari iOS) and *Add to Home Screen* to install.
+
 A mobile-first **repair cost estimator** PWA for the Spark Homes acquisition team. An agent walks a property room by room, checks off needed repairs, enters quantities, snaps photos of equipment nameplates, and gets a **live cost total** — then turns that total into a go/no-go **offer decision** on the spot. Works fully offline, installs to the home screen, exports a ZIP (Excel + photos) for the team.
 
 Built for the Spark Homes Developer Contest.
