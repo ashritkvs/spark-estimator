@@ -1,6 +1,6 @@
 # Spark Estimator
 
-**▶ Live app:** https://ashritkvs.github.io/spark-estimator/ — open on a phone (Chrome Android / Safari iOS) and *Add to Home Screen* to install.
+**▶ Live app:** https://spark-estimator.vercel.app/ — open on a phone (Chrome Android / Safari iOS) and *Add to Home Screen* to install.
 
 A mobile-first **repair cost estimator** PWA for the Spark Homes acquisition team. An agent walks a property room by room, checks off needed repairs, enters quantities, snaps photos of equipment nameplates, and gets a **live cost total** — then turns that total into a go/no-go **offer decision** on the spot. Works fully offline, installs to the home screen, exports a ZIP (Excel + photos) for the team.
 
@@ -33,7 +33,7 @@ Drop the folder on any static host (GitHub Pages, Netlify, Vercel, S3). No confi
 | `sw.js` | Service worker — offline app shell + runtime-caches the CDN libs so export/OCR survive offline. |
 | `manifest.json` | PWA manifest (installable, standalone, themed). |
 | `icon-*.png`, `favicon.png` | App icons (incl. maskable). |
-| `prices.csv` | The official price list — also the template for the global price-update feature. |
+| *(price list)* | The 107 default prices live in `index.html` (`ITEMS`), keyed by `id` — the single source of truth. The global price-update feature downloads a CSV template generated in-app, so no separate price file ships with the deploy. |
 | `spark-logo.png` | Spark Group logo (used in the projects panel). |
 
 ### Libraries (CDN, runtime-cached for offline)
@@ -48,7 +48,7 @@ No UI framework. The CSS is hand-written so the app is instant and 100% offline-
 ## Feature coverage (against the brief)
 
 - **Projects** — create / name / rename / delete, switch without data loss, each stores its own selections, quantities, **notes**, prices, and photos. Auto-saved to `localStorage` (debounced).
-- **Repair line items** — all 107 items from `prices.csv`, anchored by `id`, organized into the required **19 collapsible groups** across 5 sections. Every group has a **"No Action Needed"** option. Each item shows name, unit, qty input, unit cost, and live line total.
+- **Repair line items** — all 107 items from the official price list, anchored by `id`, organized into the required **19 collapsible groups** across 5 sections. Every group has a **"No Action Needed"** option. Each item shows name, unit, qty input, unit cost, and live line total.
 - **Price override** — tap any unit cost to override it **per-project**; upload a CSV in Settings to update standard pricing **globally** across all projects (only `id` + `cost` are read).
 - **Add / remove items** — add custom line items to any group; remove default items per-item.
 - **Adjustable rooms** — 7 room types (Interior, Kitchen, Bathroom, Systems & Structure, Exterior, Bedroom, Living/Common). Bathrooms / bedrooms / living areas are **add-as-many-as-you-need** instances, auto-labeled "Bathroom 1", "Bathroom 2"… each with its own groups. Add/remove freely mid-walkthrough.

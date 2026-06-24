@@ -1,5 +1,5 @@
 /* Spark Estimator service worker — offline-first PWA shell. */
-const CACHE = 'spark-estimator-v6';
+const CACHE = 'spark-estimator-v7';
 
 /* App shell: local files that must be available offline. */
 const SHELL = [
@@ -12,7 +12,6 @@ const SHELL = [
   './icon-512.png',
   './icon-maskable-512.png',
   './favicon.png',
-  './prices.csv',
 ];
 
 /* Export libraries — precached on install (best-effort) so Excel/ZIP export

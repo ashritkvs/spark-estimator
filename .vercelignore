@@ -1,0 +1,6 @@
+.git
+.claude
+*.log
+*.aux
+*.out
+writeup.tex
